@@ -1,6 +1,6 @@
 streamlit==1.39.0
 torch==2.5.0
-torchvision==0.20.0
+torchvision==0.23.0
 torchaudio==2.5.0
 opencv-python==4.10.0.84
 gdown
@@ -8,4 +8,5 @@ numpy
 Pillow
 matplotlib==3.9.2
 scikit-learn==1.5.2
+
 
