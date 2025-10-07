@@ -29,19 +29,18 @@ class CustomVGG16(nn.Module):
         x = self.classifier(x)
         return x
 
-# ----- Device configuration -----
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-# ----- Google Drive model download -----
-FILE_ID = '10rv2BL3IYGif1_4jnOBPAPEAMiPE5Z1W'
+# ----- Download model from Google Drive if not present -----
 MODEL_PATH = "vgg16_custom_model_diabetic_retinopathy.pth"
+GDRIVE_ID = "10rv2BL3IYGif1_4jnOBPAPEAMiPE5Z1W"
 
 if not os.path.exists(MODEL_PATH):
-    url = f'https://drive.google.com/uc?id={FILE_ID}'
+    st.info("Downloading model… This may take a while.")
+    url = f"https://drive.google.com/uc?id={GDRIVE_ID}"
     gdown.download(url, MODEL_PATH, quiet=False)
     st.success("Model downloaded successfully!")
 
-# ----- Load trained model -----
+# ----- Load model -----
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 model = CustomVGG16().to(device)
 model.load_state_dict(torch.load(MODEL_PATH, map_location=device))
 model.eval()
@@ -84,13 +83,8 @@ st.write("Upload a retinal image and get the predicted **DR stage (0–4)** from
 uploaded_file = st.file_uploader("Choose an eye image...", type=["jpg", "jpeg", "png"])
 
 if uploaded_file is not None:
-    # Display uploaded image
     st.image(uploaded_file, caption='Uploaded Image', use_container_width=True)
-
-    # Preprocess and predict
     image_bytes = uploaded_file.read()
     img_tensor = preprocess_image(image_bytes)
     prediction = predict_image(img_tensor)
-
-    # Show result
     st.success(f"**Predicted Class:** {prediction} — {class_labels[prediction]}")
