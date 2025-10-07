@@ -1,18 +1,23 @@
 # Streamlit
 streamlit==1.39.0
 
-# PyTorch ecosystem (all compatible with Python 3.13)
+# PyTorch stack (CPU or GPU if supported)
 torch==2.8.0
 torchvision==0.23.0
 torchaudio==2.8.0
 
-# Other dependencies
-numpy
-Pillow
-opencv-python
-scikit-learn
-matplotlib
-rich
-markdown-it-py
-mdurl
-pygments
+# OpenCV (headless to avoid libGL issues)
+opencv-python-headless==4.11.0.86
+
+# Common Python packages
+numpy==2.3.3
+Pillow==10.4.0
+gdown==4.7.1
+matplotlib==3.10.6
+scikit-learn==1.7.2
+
+# Optional / UI packages
+rich==13.9.4
+markdown-it-py==4.0.0
+mdurl==0.1.2
+pygments==2.19.2
