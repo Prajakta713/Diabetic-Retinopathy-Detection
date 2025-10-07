@@ -1,7 +1,12 @@
+# Streamlit
+streamlit==1.39.0
+
+# PyTorch ecosystem (all compatible with Python 3.13)
 torch==2.8.0
 torchvision==0.23.0
 torchaudio==2.8.0
-streamlit==1.39.0
+
+# Other dependencies
 numpy
 Pillow
 opencv-python
