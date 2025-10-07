@@ -1,115 +1,75 @@
 import streamlit as st
 import torch
-import torch.nn as nn
-from torchvision.models import vgg16
-import torchvision.transforms as transforms
-import cv2
-import numpy as np
+from torchvision import transforms
+from PIL import Image
 import gdown
 import os
 
-# ----------------------------------------
-# Download model from Google Drive (only once)
-# ----------------------------------------
-MODEL_URL = "https://drive.google.com/uc?id=10rv2BL3IYGif1_4jnOBPAPEAMiPE5Z1W"
+# -------------------- CONFIG --------------------
+st.set_page_config(page_title="Diabetic Retinopathy Detection", layout="centered")
+
+# Google Drive file ID
+FILE_ID = "https://drive.google.com/uc?id=10rv2BL3IYGif1_4jnOBPAPEAMiPE5Z1W"  # Replace with your model's Google Drive file ID
 MODEL_PATH = "vgg16_custom_model_diabetic_retinopathy.pth"
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-if not os.path.exists(MODEL_PATH):
-    st.write("🔄 Downloading model from Google Drive...")
-    gdown.download(MODEL_URL, MODEL_PATH, quiet=False)
-    st.success("✅ Model downloaded successfully!")
+# -------------------- MODEL DOWNLOAD --------------------
+@st.cache_resource
+def download_model():
+    if not os.path.exists(MODEL_PATH):
+        url = f"https://drive.google.com/uc?id={FILE_ID}"
+        st.info("Downloading model from Google Drive...")
+        gdown.download(url, MODEL_PATH, quiet=False)
+    st.success("Model ready!")
+    return MODEL_PATH
 
-# ----------------------------------------
-# Define model architecture
-# ----------------------------------------
-class CustomVGG16(nn.Module):
-    def __init__(self):
-        super(CustomVGG16, self).__init__()
-        self.features = vgg16(pretrained=True).features
-        self.classifier = nn.Sequential(
-            nn.Linear(25088, 4096),
-            nn.ReLU(True),
-            nn.Dropout(0.5),
-            nn.Linear(4096, 4096),
-            nn.ReLU(True),
-            nn.Dropout(0.5),
-            nn.Linear(4096, 5)
-        )
-
-    def forward(self, x):
-        x = self.features(x)
-        x = x.view(x.size(0), -1)
-        x = self.classifier(x)
-        return x
-
-# ----------------------------------------
-# Load trained model
-# ----------------------------------------
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
+# -------------------- MODEL LOADING --------------------
 @st.cache_resource
 def load_model():
-    model = CustomVGG16().to(device)
-    model.load_state_dict(torch.load(MODEL_PATH, map_location=device))
+    from torchvision.models import vgg16
+
+    # Create model
+    model = vgg16(pretrained=False)
+    model.classifier[6] = torch.nn.Linear(4096, 5)  # Assuming 5 classes for DR
+    model.load_state_dict(torch.load(MODEL_PATH, map_location=DEVICE))
+    model.to(DEVICE)
     model.eval()
     return model
 
-model = load_model()
-st.success("✅ Model loaded successfully!")
-
-# ----------------------------------------
-# Preprocess uploaded image
-# ----------------------------------------
-def preprocess_image(image_bytes):
-    img = cv2.imdecode(np.frombuffer(image_bytes, np.uint8), cv2.IMREAD_COLOR)
-    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    img = cv2.resize(img, (224, 224))
-    
+# -------------------- IMAGE TRANSFORM --------------------
+def preprocess_image(image: Image.Image):
     transform = transforms.Compose([
+        transforms.Resize((224, 224)),
         transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                             std=[0.229, 0.224, 0.225])
+        transforms.Normalize([0.485, 0.456, 0.406],
+                             [0.229, 0.224, 0.225])
     ])
-    img = transform(img)
-    img = img.unsqueeze(0)
-    return img.to(device)
+    return transform(image).unsqueeze(0).to(DEVICE)
 
-# ----------------------------------------
-# Predict class
-# ----------------------------------------
-def predict_image(img_tensor):
+# -------------------- PREDICTION --------------------
+def predict(image: Image.Image):
+    tensor = preprocess_image(image)
     with torch.no_grad():
-        output = model(img_tensor)
-    _, predicted = torch.max(output, 1)
+        outputs = model(tensor)
+        _, predicted = torch.max(outputs, 1)
     return predicted.item()
 
-# ----------------------------------------
-# Class labels
-# ----------------------------------------
-class_labels = {
-    0: "No DR (Healthy Retina)",
-    1: "Mild DR",
-    2: "Moderate DR",
-    3: "Severe DR",
-    4: "Proliferative DR"
-}
+# -------------------- STREAMLIT APP --------------------
+st.title("🩸 Diabetic Retinopathy Detection")
+st.write("Upload a fundus image and the model will predict the DR stage.")
 
-# ----------------------------------------
-# Streamlit UI
-# ----------------------------------------
-st.title("🩺 Diabetic Retinopathy Detection")
-st.write("Upload a retinal image to get the predicted **DR stage (0–4)** from the trained VGG16 model.")
+# Download and load model
+download_model()
+model = load_model()
 
-uploaded_file = st.file_uploader("📤 Upload a retinal image...", type=["jpg", "jpeg", "png"])
+# File uploader
+uploaded_file = st.file_uploader("Choose a fundus image", type=["jpg", "jpeg", "png"])
+if uploaded_file:
+    image = Image.open(uploaded_file).convert("RGB")
+    st.image(image, caption="Uploaded Image", use_column_width=True)
 
-if uploaded_file is not None:
-    # Display uploaded image
-    st.image(uploaded_file, caption='Uploaded Image', use_container_width=True)
-
-    # Preprocess and predict
-    image_bytes = uploaded_file.read()
-    img_tensor = preprocess_image(image_bytes)
-    prediction = predict_image(img_tensor)
-
-    # Show result
-    st.success(f"**Predicted Class:** {prediction} — {class_labels[prediction]}")
+    if st.button("Predict"):
+        with st.spinner("Predicting..."):
+            class_idx = predict(image)
+            classes = ["No DR", "Mild", "Moderate", "Severe", "Proliferative DR"]
+            st.success(f"Prediction: **{classes[class_idx]}**")
