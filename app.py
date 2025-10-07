@@ -1,58 +1,96 @@
 import streamlit as st
 import torch
+import torch.nn as nn
 from torchvision.models import vgg16
+import torchvision.transforms as transforms
+import cv2
+import numpy as np
 import gdown
 import os
 
-# Device configuration
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# ----- Define model architecture -----
+class CustomVGG16(nn.Module):
+    def __init__(self):
+        super(CustomVGG16, self).__init__()
+        self.features = vgg16(pretrained=True).features
+        self.classifier = nn.Sequential(
+            nn.Linear(25088, 4096),
+            nn.ReLU(True),
+            nn.Dropout(0.5),
+            nn.Linear(4096, 4096),
+            nn.ReLU(True),
+            nn.Dropout(0.5),
+            nn.Linear(4096, 5)
+        )
 
-# Google Drive file ID and local path
+    def forward(self, x):
+        x = self.features(x)
+        x = x.view(x.size(0), -1)
+        x = self.classifier(x)
+        return x
+
+# ----- Device configuration -----
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+# ----- Google Drive model download -----
 FILE_ID = '10rv2BL3IYGif1_4jnOBPAPEAMiPE5Z1W'
-MODEL_PATH = 'vgg16_custom_model_diabetic_retinopathy.pth'
+MODEL_PATH = "vgg16_custom_model_diabetic_retinopathy.pth"
 
-# Function to download model from Google Drive
-def download_model():
-    if not os.path.exists(MODEL_PATH):
-        url = f'https://drive.google.com/uc?id={FILE_ID}'
-        gdown.download(url, MODEL_PATH, quiet=False)
-        st.success("Model downloaded successfully!")
+if not os.path.exists(MODEL_PATH):
+    url = f'https://drive.google.com/uc?id={FILE_ID}'
+    gdown.download(url, MODEL_PATH, quiet=False)
+    st.success("Model downloaded successfully!")
 
-# Function to load model
-def load_model():
-    # Create model
-    model = vgg16(pretrained=False)
-    model.classifier[6] = torch.nn.Linear(4096, 5)  # Assuming 5 classes
-    # Load state dict
-    model.load_state_dict(torch.load(MODEL_PATH, map_location=DEVICE))
-    model.to(DEVICE)
-    model.eval()
-    return model
+# ----- Load trained model -----
+model = CustomVGG16().to(device)
+model.load_state_dict(torch.load(MODEL_PATH, map_location=device))
+model.eval()
 
-# Download and load model
-download_model()
-model = load_model()
-
-# File uploader
-uploaded_file = st.file_uploader("Choose a fundus image", type=["jpg", "jpeg", "png"])
-
-if uploaded_file:
-    from PIL import Image
-    import torchvision.transforms as transforms
-
-    # Preprocess the image
-    image = Image.open(uploaded_file).convert("RGB")
-    preprocess = transforms.Compose([
-        transforms.Resize((224, 224)),
+# ----- Preprocess uploaded image -----
+def preprocess_image(image_bytes):
+    img = cv2.imdecode(np.frombuffer(image_bytes, np.uint8), cv2.IMREAD_COLOR)
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    img = cv2.resize(img, (224, 224))
+    
+    transform = transforms.Compose([
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406],
                              std=[0.229, 0.224, 0.225])
     ])
-    input_tensor = preprocess(image).unsqueeze(0).to(DEVICE)
+    img = transform(img)
+    img = img.unsqueeze(0)
+    return img.to(device)
 
-    # Make prediction
+# ----- Predict class -----
+def predict_image(img_tensor):
     with torch.no_grad():
-        outputs = model(input_tensor)
-        _, predicted = torch.max(outputs, 1)
-    
-    st.write(f"Predicted class: {predicted.item()}")
+        output = model(img_tensor)
+    _, predicted = torch.max(output, 1)
+    return predicted.item()
+
+# ----- Class labels -----
+class_labels = {
+    0: "No DR (Healthy Retina)",
+    1: "Mild DR",
+    2: "Moderate DR",
+    3: "Severe DR",
+    4: "Proliferative DR"
+}
+
+# ----- Streamlit UI -----
+st.title("🩺 Diabetic Retinopathy Detection")
+st.write("Upload a retinal image and get the predicted **DR stage (0–4)** from the trained VGG16 model.")
+
+uploaded_file = st.file_uploader("Choose an eye image...", type=["jpg", "jpeg", "png"])
+
+if uploaded_file is not None:
+    # Display uploaded image
+    st.image(uploaded_file, caption='Uploaded Image', use_container_width=True)
+
+    # Preprocess and predict
+    image_bytes = uploaded_file.read()
+    img_tensor = preprocess_image(image_bytes)
+    prediction = predict_image(img_tensor)
+
+    # Show result
+    st.success(f"**Predicted Class:** {prediction} — {class_labels[prediction]}")
