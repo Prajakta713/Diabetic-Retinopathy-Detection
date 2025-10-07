@@ -8,6 +8,16 @@ import numpy as np
 import gdown
 import os
 
+# ----- Download model from Google Drive -----
+MODEL_URL = "https://drive.google.com/uc?id=10rv2BL3IYGif1_4jnOBPAPEAMiPE5Z1W"
+MODEL_PATH = "vgg16_custom_model_diabetic_retinopathy.pth"
+
+@st.cache_resource
+def download_model():
+    if not os.path.exists(MODEL_PATH):
+        gdown.download(MODEL_URL, MODEL_PATH, quiet=False)
+    return MODEL_PATH
+
 # ----- Define model architecture -----
 class CustomVGG16(nn.Module):
     def __init__(self):
@@ -22,27 +32,17 @@ class CustomVGG16(nn.Module):
             nn.Dropout(0.5),
             nn.Linear(4096, 5)
         )
-
     def forward(self, x):
         x = self.features(x)
         x = x.view(x.size(0), -1)
         x = self.classifier(x)
         return x
 
-# ----- Download model from Google Drive if not present -----
-MODEL_PATH = "vgg16_custom_model_diabetic_retinopathy.pth"
-GDRIVE_ID = "10rv2BL3IYGif1_4jnOBPAPEAMiPE5Z1W"
-
-if not os.path.exists(MODEL_PATH):
-    st.info("Downloading model… This may take a while.")
-    url = f"https://drive.google.com/uc?id={GDRIVE_ID}"
-    gdown.download(url, MODEL_PATH, quiet=False)
-    st.success("Model downloaded successfully!")
-
-# ----- Load model -----
+# ----- Load trained model -----
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+model_file = download_model()
 model = CustomVGG16().to(device)
-model.load_state_dict(torch.load(MODEL_PATH, map_location=device))
+model.load_state_dict(torch.load(model_file, map_location=device))
 model.eval()
 
 # ----- Preprocess uploaded image -----
@@ -50,7 +50,6 @@ def preprocess_image(image_bytes):
     img = cv2.imdecode(np.frombuffer(image_bytes, np.uint8), cv2.IMREAD_COLOR)
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     img = cv2.resize(img, (224, 224))
-    
     transform = transforms.Compose([
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406],
