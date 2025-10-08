@@ -9,7 +9,7 @@ import gdown
 import os
 
 # ----- Download model from Google Drive -----
-MODEL_URL = "https://drive.google.com/uc?id=10rv2BL3IYGif1_4jnOBPAPEAMiPE5Z1W"
+MODEL_URL = "https://drive.google.com/file/d/10rv2BL3IYGif1_4jnOBPAPEAMiPE5Z1W/view?usp=sharing"
 MODEL_PATH = "vgg16_custom_model_diabetic_retinopathy.pth"
 
 @st.cache_resource
@@ -87,3 +87,4 @@ if uploaded_file is not None:
     img_tensor = preprocess_image(image_bytes)
     prediction = predict_image(img_tensor)
     st.success(f"**Predicted Class:** {prediction} — {class_labels[prediction]}")
+
