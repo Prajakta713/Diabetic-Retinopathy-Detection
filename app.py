@@ -17,7 +17,7 @@ MODEL_PATH = "vgg16_custom_model_diabetic_retinopathy.pth"
 def download_model():
     if not os.path.exists(MODEL_PATH):
         st.info("Downloading model... please wait ⏳")
-        gdown.download(MODEL_URL, MODEL_PATH, quiet=False)
+        gdown.download(MODEL_URL, MODEL_PATH, quiet=False, fuzzy=True)  # <--- added fuzzy=True
         if not os.path.exists(MODEL_PATH) or os.path.getsize(MODEL_PATH) < 1000000:
             st.error("Model download failed. Please check the Google Drive link.")
             st.stop()
@@ -106,3 +106,4 @@ if uploaded_file is not None:
     st.success(f"### 🧠 Prediction: {class_labels[prediction]}")
     st.write(f"**Class Index:** {prediction}")
     st.balloons()
+
