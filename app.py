@@ -18,6 +18,9 @@ def download_model():
     if not os.path.exists(MODEL_PATH):
         st.info("Downloading model... please wait ⏳")
         gdown.download(MODEL_URL, MODEL_PATH, quiet=False)
+        if not os.path.exists(MODEL_PATH) or os.path.getsize(MODEL_PATH) < 1000000:
+            st.error("Model download failed. Please check the Google Drive link.")
+            st.stop()
     return MODEL_PATH
 
 # ----- Define Custom VGG16 Architecture -----
@@ -44,12 +47,16 @@ class CustomVGG16(nn.Module):
 # ----- Load Model -----
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 model_file = download_model()
-
 model = CustomVGG16().to(device)
 
-# FIX for PyTorch 2.6: allow full state dict loading
-state_dict = torch.load(model_file, map_location=device, weights_only=False)
-model.load_state_dict(state_dict)
+# Load state_dict safely (ensure model file is correct)
+try:
+    state_dict = torch.load(model_file, map_location=device)
+    model.load_state_dict(state_dict)
+except Exception as e:
+    st.error(f"Failed to load model: {e}")
+    st.stop()
+
 model.eval()
 
 # ----- Preprocess Uploaded Image -----
